@@ -34,7 +34,7 @@ const createdb = async (envPath=".env", envSamplePath=".env.sample") =>
 		await outputFile(envPath, envString);
 	}
 
-	await db(env);
+	return db(env);
 };
 
 
@@ -42,33 +42,54 @@ const createdb = async (envPath=".env", envSamplePath=".env.sample") =>
 const db = async env =>
 {
 	const host     = env.POSTGRES_HOST;
-	const name     = env.POSTGRES_NAME;
-	const password = env.POSTGRES_PASSWORD;
 	const port     = env.POSTGRES_PORT;
 	const user     = env.POSTGRES_USER;
+	const password = env.POSTGRES_PASSWORD;
 
-	if (!isset(host) || !isset(name) || !isset(password) || !isset(user))
+	const db       = env.NEW_DB;
+	const newUser  = env.NEW_USER;
+	const newPassword = env.NEW_PASSWORD;
+
+	if (!isset(host) || !isset(db) || !isset(password) || !isset(user))
 	{
 		throw new Error("Environmental variable(s) not set");
 	}
 
-	const psql = knex({ client:"pg", connection:{ host, port } });
+	const psql = knex({
+		client: 'pg',
+		connection: { host, user, password, port, database: 'postgres' },
+		debug: false,
+	});
 
 	try
 	{
-		await psql.raw("create database ??", name);
+		console.info("creating database", db);
+		await psql.raw("create database ??", db);
 
 		await psql.transaction(async trx =>
 		{
 			// Passwords within "create user" are specifically disallowed parameters in PostgreSQL
-			const query = trx.raw("create user ?? with encrypted password ?", [user, password]).toString();
+			console.info("creating new user", newUser)
+			const query = trx.raw("create user ?? with encrypted password ?", [newUser, newPassword]).toString();
 
 			await trx.raw(query);
-			await trx.raw("revoke connect on database ?? from public", name);
-			await trx.raw("grant all on database ?? to ??", [name, user]);
+			console.info("revoking public connect permissions for new database..")
+			await trx.raw("revoke connect on database ?? from public", db);
+			console.info("granting permissions on new database for new user..")
+			await trx.raw("grant all on database ?? to ??", [db, newUser]);
 		});
 
+		console.info("database transaction complete")
+
 		psql.destroy();
+
+		return {
+			HOST: host,
+			PORT: port,
+			DB: db,
+			USER: newUser,
+			PASSWORD: newPassword,
+		}
 	}
 	catch (error)
 	{
@@ -87,9 +108,11 @@ const prompts = async env =>
 	[
 		"POSTGRES_HOST",
 		"POSTGRES_PORT",
-		"POSTGRES_NAME",
 		"POSTGRES_USER",
-		"POSTGRES_PASSWORD"
+		"POSTGRES_PASSWORD",
+		"NEW_DB",
+		"NEW_USER",
+		"NEW_PASSWORD",
 	];
 
 	// TODO :: also prompt for SUPERUSER_NAME and SUPERUSER_PASSWORD (https://github.com/brianc/node-postgres/wiki/Client#new-clientobject-config--client)
