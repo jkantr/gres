@@ -10,7 +10,7 @@ const {parse:parseEnv} = require("dotenv");
 
 // TODO :: try https://npmjs.com/pgtools ?
 
-const createdb = async (envPath=".env", envSamplePath=".env.sample") =>
+const createdb = async (envPath=".env", envSamplePath=".env.sample", interactive = true) =>
 {
 	const envs = await Promise.all(
 	[
@@ -20,7 +20,7 @@ const createdb = async (envPath=".env", envSamplePath=".env.sample") =>
 
 	const envString = envs[0] || envs[1];
 	const env = await parseEnv(envString);
-	const changes = await prompts(env);
+	const changes = await prompts(env, interactive);
 
 	if (Object.keys(changes).length > 0)
 	{
@@ -100,8 +100,9 @@ const db = async env =>
 
 
 
-const prompts = async env =>
+const prompts = async (env, i) =>
 {
+	if (!i) return env;
 	const enquirer = new Enquirer();
 
 	const promptVars =
