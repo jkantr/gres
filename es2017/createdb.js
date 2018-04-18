@@ -76,7 +76,9 @@ const db = async env =>
 			console.info("revoking public connect permissions for new database..")
 			await trx.raw("revoke connect on database ?? from public", db);
 			console.info("granting permissions on new database for new user..")
-			await trx.raw("grant all on database ?? to ??", [db, newUser]);
+			await trx.raw("grant all privileges on database ?? to ??", [db, newUser]);
+			console.info("changing owner of database to new user");
+			await trx.raw("alter database ?? owner to ??", [db, newUser]);
 		});
 
 		console.info("database transaction complete")
